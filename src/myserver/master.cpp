@@ -70,8 +70,6 @@ static struct Master_state {
   vector<int> to_kill_workers;
   WorkerQueueCompare compare_obj;
   MinMaxHeap<int, vector<int>, WorkerQueueCompare> worker_heap;
-  pthread_mutex_t heap_lock = PTHREAD_MUTEX_INITIALIZER;
-  pthread_mutex_t next_tag_lock = PTHREAD_MUTEX_INITIALIZER;
 
   Master_state() : compare_obj(this->my_worker_stats), worker_heap(this->active_workers, this->compare_obj) {}
 
@@ -144,9 +142,7 @@ void handle_new_worker_online(Worker_handle worker_handle, int tag) {
 
   // stat map needs to be set first because heap will use the map
   // size to compare this element with other elements
-  pthread_mutex_lock(&mstate.heap_lock);
   mstate.insert_worker(tag);
-  pthread_mutex_unlock(&mstate.heap_lock);
 
   //The worker has completed starting
   mstate.is_worker_starting = false;
@@ -175,7 +171,6 @@ void handle_worker_response(Worker_handle worker_handle, const Response_msg& res
   int tag = resp.get_tag();
   Client_handle client_handle;
 
-  pthread_mutex_lock(&mstate.heap_lock);
   client_handle = stat.tag_client_map[tag];
   DLOG(INFO) << "Worker " << worker_tag << ": client_handle is " << client_handle << " for request " << tag;
   stat.tag_client_map.erase(tag);
@@ -184,7 +179,6 @@ void handle_worker_response(Worker_handle worker_handle, const Response_msg& res
     mstate.worker_heap.deleteKeyByValue(worker_tag);
     mstate.insert_worker(worker_tag);
   }
-  pthread_mutex_unlock(&mstate.heap_lock);
 
   send_client_response(client_handle, resp);
 
@@ -209,14 +203,11 @@ void handle_client_request(Client_handle client_handle, const Request_msg& clien
   // called to forward the worker's response back to the server.
 
   int tag;
-  pthread_mutex_lock(&mstate.next_tag_lock);
   tag = mstate.next_tag++;
-  pthread_mutex_unlock(&mstate.next_tag_lock);
   
   Request_msg worker_req(tag, client_req);
   Worker_handle worker_handle;
   
-  pthread_mutex_lock(&mstate.heap_lock);
   int worker_tag = mstate.get_min_queue_worker();
   mstate.worker_heap.popMin();
   Worker_stat& stat = mstate.my_worker_stats[worker_tag];
@@ -224,7 +215,6 @@ void handle_client_request(Client_handle client_handle, const Request_msg& clien
   DLOG(INFO) << "Worker " << worker_tag << ": added " << tag << ":" << client_handle;
   worker_handle = stat.handle;
   mstate.insert_worker(worker_tag);
-  pthread_mutex_unlock(&mstate.heap_lock);
 
   send_request_to_worker(worker_handle, worker_req);
 
@@ -263,7 +253,6 @@ void handle_tick() {
   }
 
   // check the min/max. queue size, request a worker node or schedule to kill a worker node
-  pthread_mutex_lock(&mstate.heap_lock);
 
   int min_worker_tag = mstate.get_min_queue_worker();
   int min_queue_size = mstate.my_worker_stats[min_worker_tag].tag_client_map.size();
@@ -289,8 +278,6 @@ void handle_tick() {
       mstate.is_worker_dying = true;
     }
   }
-
-  pthread_mutex_unlock(&mstate.heap_lock);
 
 }
 

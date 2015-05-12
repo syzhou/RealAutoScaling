@@ -47,7 +47,7 @@ class TraceJob:
     self.actual_resp = '';
     self.success = False;
 
-
+    
 class ConnectionPool(object):
   def __init__(self, hostport):
     self.hostport = hostport
@@ -66,8 +66,6 @@ class ConnectionPool(object):
       if ret is None:
 	print "Could not connect to %s" % self.hostport
 	os._exit(1)
-      retval = comm.TaggedMessage(comm.NEW_CLIENT, 0).to_socket(ret)
-      print "NEW_CLIENT %s" % retval
 
     return ret
 
@@ -77,7 +75,7 @@ class ConnectionPool(object):
     self.lock.release()
 
 class WorkGenThread(threading.Thread):
-
+  
     def __init__(self, conn_pool, job):
         threading.Thread.__init__(self)
         self.job = job;
@@ -89,7 +87,7 @@ class WorkGenThread(threading.Thread):
 
     def validate_response(self, actual_resp, correct_resp):
         return (actual_resp == correct_resp);
-
+      
     def run(self):
 	sock = self.conn_pool.get_conn()
 	before = datetime.datetime.now()
@@ -103,9 +101,9 @@ class WorkGenThread(threading.Thread):
         self.job.latency = after - before
 
         self.log("Request %d: req: \"%s\", resp: \"%s\", latency: %d ms" % (self.job.id, self.job.descr['work'], self.job.actual_resp, 1000 * self.job.latency.total_seconds()))
-
+        
 	self.conn_pool.put_conn(sock)
-
+        
         # validation
         self.job.success = self.validate_response(self.job.actual_resp, self.job.descr['resp'])
         if not (self.job.success or args.ignoreerror):
@@ -115,7 +113,7 @@ class WorkGenThread(threading.Thread):
 
 
 ######################################################################
-
+            
 conn_pool = ConnectionPool(args.address)
 
 ######################################################################
@@ -125,7 +123,6 @@ conn_pool = ConnectionPool(args.address)
 print "Waiting for server to initialize...";
 
 # wait for someone to be listening on the port
-'''
 while True:
   try:
     socket.create_connection(args.address).close()
@@ -135,9 +132,7 @@ while True:
       if num != errno.ECONNREFUSED:
           raise
   time.sleep(0.1)
-'''
 
-time.sleep(20)
 server_ready = False
 while not server_ready:
   sock = conn_pool.get_conn()
@@ -148,15 +143,14 @@ while not server_ready:
   if resp == "ready":
     server_ready = True;
   else:
-    conn_pool.put_conn(sock)
     time.sleep(0.5);
 
 ######################################################################
 # Server is ready. Start the trace
 ######################################################################
-
+    
 print "Server ready, beginning trace...";
-
+    
 start_time = datetime.datetime.now()
 traceJobs = []
 
@@ -176,12 +170,12 @@ def all_threads():
 
     if args.verbose:
       print "Starting thread", job.descr;
-
+      
     t = WorkGenThread(conn_pool, job);
     t.start()
     yield t
 
-
+    
 threads = [t for t in all_threads()]
 for thread in threads:
   thread.join()
@@ -195,7 +189,7 @@ elapsed_time = (end_time - start_time).total_seconds();
 ######################################################################
 
 sock = conn_pool.get_conn()
-
+  
 comm.TaggedMessage(comm.WORKER_UP_TIME_STATS, 0).to_socket(sock)
 comm.TaggedMessage.from_socket(sock)
 resp = comm.recv_string(sock)
@@ -211,7 +205,7 @@ total_uptime = float(items[1])
 ######################################################################
 
 print ""
-print "--- Results Summary ---"
+print "--- Results Summary ---" 
 print ""
 
 avg_latency = 0.0;
@@ -226,7 +220,7 @@ for job in traceJobs:
 
   if job.descr['work'] != "cmd=lastrequest":
     avg_latency += 1000 * job.latency.total_seconds();
-    jobs_counted += 1;
+    jobs_counted += 1;  
     print "[%d] Request: %s, success: %s, latency: %d" % (job.id, job.descr['work'], success_str, 1000 * job.latency.total_seconds());
 
 if any_failed_request:
@@ -242,7 +236,7 @@ avg_latency = avg_latency / jobs_counted;
 print "Avg request latency:  %.2f ms" % avg_latency;
 print "Total test time:      %.2f sec" % elapsed_time;
 print "Workers booted:       %d"   % total_workers;
-print "Compute used:         %.2f sec" % total_uptime;
+print "Compute used:         %.2f sec" % total_uptime; 
 print ""
 
 run_grader(args.tracefile.name, not any_failed_request, traceJobs, total_uptime, avg_latency, elapsed_time);
@@ -262,3 +256,6 @@ if emit_results:
       last_req_time = int(job.descr['time']);
   text_file.write("{\"time\": %d, \"work\": \"cmd=lastrequest\", \"resp\": \"ack\" }\n" % (last_req_time + 500));
   text_file.close();
+  
+
+  
