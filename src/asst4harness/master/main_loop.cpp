@@ -133,20 +133,20 @@ static void accumulate_time(Worker_handle worker_handle) {
 
 // only timer thread will call this function
 void kill_worker_node(Worker_handle worker_handle) {
-  pthread_mutex_lock(&worker_handle_lock);
+  //pthread_mutex_lock(&worker_handle_lock);
   NETLOG(INFO) << "HAHA: erasing " << worker_handle;
   CHECK_EQ(workers.erase(worker_handle), 1U) << "Attempt to kill non worker";
   CHECK_EQ(worker_write_locks.erase(worker_handle), 1U) << "Attempt to remove lock of non worker";
-  pthread_mutex_unlock(&worker_handle_lock);
+  //pthread_mutex_unlock(&worker_handle_lock);
 
   // TODO possible race with close_connection call in handle_worker_read()
   // but if message are correctly handled, there will be no race
   close_connection(worker_handle);
 
-  pthread_mutex_lock(&worker_boot_time_lock);
+  //pthread_mutex_lock(&worker_boot_time_lock);
   accumulate_time(worker_handle);
   worker_boot_times.erase(worker_handle);
-  pthread_mutex_unlock(&worker_boot_time_lock);
+  //pthread_mutex_unlock(&worker_boot_time_lock);
 }
 
 void send_request_to_worker(Worker_handle worker_handle, const Request_msg& job) {
