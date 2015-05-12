@@ -6,7 +6,6 @@
 #include "server/messages.h"
 #include "server/master.h"
 #include "tools/cycle_timer.h"
-#include "server/pullrequest.h"
 
 #include <climits>
 #include <vector>
@@ -51,7 +50,18 @@ static struct Master_state {
   // place.  You do not need to preserve any of the fields below, they
   // exist only to implement the basic functionality of the starter
   // code.
+
+  bool server_ready;
+  int max_num_workers;
+  unsigned int initial_num_workers;
   int next_tag;
+  int next_additional_worker;
+  double server_start_time;
+  int prev_min_queue_size;
+
+  bool is_worker_starting;
+  bool is_worker_dying;
+  bool can_kill_worker;
 
   // data structure for worker queue size
   unordered_map<int, Worker_stat> my_worker_stats;
@@ -85,10 +95,36 @@ static struct Master_state {
 
 } mstate;
 
-//void add_worker();
+void add_worker();
 
-void master_node_init() {
+// TODO initial workers to be started by autoscaler
+// TODO manage worker naming in autoscaler, good for debugging and logging
+void master_node_init(int max_workers, int& tick_period) {
+
+  // set up tick handler to fire every 5 seconds. (feel free to
+  // configure as you please)
+  tick_period = 1;
+
   mstate.next_tag = 0;
+  mstate.next_additional_worker = 1;
+  mstate.max_num_workers = max_workers;
+  mstate.initial_num_workers = INITIAL_NUM_WORKERS;
+
+  // don't mark the server as ready until the server is ready to go.
+  // This is actually when the first worker is up and running, not
+  // when 'master_node_init' returns
+  mstate.server_ready = false;
+
+  for (unsigned int i = 0;i < mstate.initial_num_workers;i++) {
+    int tag = -1 - i;
+    Request_msg req(tag);
+    req.set_arg("name", string("my worker ") + to_string(i+1));
+    request_new_worker_node(req);
+  }
+  mstate.is_worker_starting = false;
+  mstate.is_worker_dying = false;
+  mstate.can_kill_worker = false;
+  mstate.prev_min_queue_size = 0;
 }
 
 // TODO on and off of is_worker_starting, is_worker_dying also be set and clear
@@ -111,6 +147,17 @@ void handle_new_worker_online(Worker_handle worker_handle, int tag) {
   pthread_mutex_lock(&mstate.heap_lock);
   mstate.insert_worker(tag);
   pthread_mutex_unlock(&mstate.heap_lock);
+
+  //The worker has completed starting
+  mstate.is_worker_starting = false;
+  // Now that a worker is booted, let the system know the server is
+  // ready to begin handling client requests.  The test harness will
+  // now start its timers and start hitting your server with requests.
+  if (mstate.server_ready == false && mstate.active_workers.size() == mstate.initial_num_workers) {
+    server_init_complete();
+    mstate.server_ready = true;
+    mstate.server_start_time = CycleTimer::currentSeconds();
+  }
 }
 
 void handle_worker_response(Worker_handle worker_handle, const Response_msg& resp) {
@@ -165,10 +212,10 @@ void handle_client_request(Client_handle client_handle, const Request_msg& clien
   pthread_mutex_lock(&mstate.next_tag_lock);
   tag = mstate.next_tag++;
   pthread_mutex_unlock(&mstate.next_tag_lock);
-
+  
   Request_msg worker_req(tag, client_req);
   Worker_handle worker_handle;
-
+  
   pthread_mutex_lock(&mstate.heap_lock);
   int worker_tag = mstate.get_min_queue_worker();
   mstate.worker_heap.popMin();
@@ -194,51 +241,6 @@ void handle_client_request(Client_handle client_handle, const Request_msg& clien
   */
 }
 
-void handle_pull_request(PullRequest& request, PullResponse& response) {
-  // handle request
-  pthread_mutex_lock(&mstate.heap_lock);
-  for (int i = 0; i < request.todisableworkers_size(); i++) {
-    int tag = request.todisableworkers(i);
-
-    mstate.worker_heap.deleteKeyByValue(tag);
-    mstate.to_kill_workers.push_back(tag);
-  }
-
-  for (int i = 0; i < request.torebornworkers_size(); i++) {
-    int tag = request.torebornworkers(i);
-
-    vector<int>::iterator it = find(mstate.to_kill_workers.begin(), mstate.to_kill_workers.end(), tag);
-	if (it == mstate.to_kill_workers.end()) {
-		DLOG(INFO) << "ERROR: attempt to reborn non disabled worker";
-	}
-    mstate.to_kill_workers.erase(it);
-    mstate.insert_worker(tag);
-  }
-
-  // fill response
-  response.set_useless(0);
-  vector<int>::iterator it;
-  for (it = mstate.active_workers.begin();it != mstate.active_workers.end();it++) {
-    PullResponse::WorkerStat *workerStat = response.add_workers();
-    int tag = *it;
-    workerStat->set_tag(tag);
-    workerStat->set_queuesize(mstate.my_worker_stats[tag].tag_client_map.size());
-  }
-  for (it = mstate.to_kill_workers.begin();it != mstate.to_kill_workers.end();) {
-    int tag = *it;
-    if (mstate.my_worker_stats[tag].tag_client_map.size() == 0) {
-      response.add_tokillworkers(tag);
-      mstate.my_worker_stats.erase(tag);
-      it = mstate.to_kill_workers.erase(it);
-    }
-    else {
-      it++;
-    }
-  }
-  pthread_mutex_unlock(&mstate.heap_lock);
-}
-
-/*
 void handle_tick() {
 
   if (mstate.server_ready == false)
@@ -249,7 +251,7 @@ void handle_tick() {
     if (mstate.my_worker_stats[(*it)].tag_client_map.size() == 0) {
       DLOG(INFO) << "KILL: worker " << *it <<
         " emptied, shutting it down" << endl;
-
+      
       kill_worker_node(mstate.my_worker_stats[(*it)].handle);
       mstate.my_worker_stats.erase(*it);
       it = mstate.to_kill_workers.erase(it);
@@ -312,4 +314,3 @@ void add_worker() {
     }
   }
 }
-*/

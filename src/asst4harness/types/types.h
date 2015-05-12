@@ -16,8 +16,7 @@ typedef enum {
   ISREADY,
   SHUTDOWN,
   WORKER_UP_TIME_STATS,
-  NEW_CLIENT,
-  AUTOSCALER
+  NEW_CLIENT
 } message_t;
 
 typedef struct {

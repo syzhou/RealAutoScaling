@@ -34,7 +34,6 @@ $(eval $(call define_program,master,    \
         $(HARNESSDIR)/master/main.cpp       \
         $(HARNESSDIR)/master/main_loop.cpp  \
         $(SRCDIR)/myserver/master.cpp   \
-        $(SRCDIR)/myserver/pullrequest.cpp  \
 ))
 
 $(eval $(call define_library,comm,      \
@@ -68,7 +67,7 @@ endif
 CXX=g++
 CXXFLAGS+=-Wall -Wextra -O2 -std=c++11
 CPPFLAGS+=-I$(CURDIR)/src/asst4harness -I$(CURDIR)/src/asst4include $(foreach lib,$(LIBS), $(shell $(PKGCONFIG) --cflags $(lib)))
-LDFLAGS+=-lpthread $(foreach lib,$(LIBS), $(shell $(PKGCONFIG) --libs $(lib))) -Xlinker -rpath -Xlinker external_lib -lprotobuf
+LDFLAGS+=-lpthread $(foreach lib,$(LIBS), $(shell $(PKGCONFIG) --libs $(lib))) -Xlinker -rpath -Xlinker external_lib
 
 $(LOGDIR):
 	mkdir -p $@

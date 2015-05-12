@@ -3,8 +3,7 @@
 #ifndef __ASST4INCLUDE_MASTER_H__
 #define __ASST4INCLUDE_MASTER_H__
 
-class PullRequest;
-class PullResponse;
+
 
 class Response_msg;
 class Request_msg;
@@ -46,7 +45,7 @@ void send_request_to_worker(Worker_handle worker_handle, const Request_msg& req)
  * can be used to identify between workers if a number are launched at
  * the same time).
  */
-//void request_new_worker_node(const Request_msg& req);
+void request_new_worker_node(const Request_msg& req);
 
 /**
  * @brief Kill a worker node.
@@ -54,7 +53,7 @@ void send_request_to_worker(Worker_handle worker_handle, const Request_msg& req)
  * Note: Calling this function is the appropriate way to terminate a
  * worker.
  */
-//void kill_worker_node(Worker_handle worker_handle);
+void kill_worker_node(Worker_handle worker_handle);
 
 /**
  * @brief Tell the master process the server is ready to accept requests
@@ -63,7 +62,7 @@ void send_request_to_worker(Worker_handle worker_handle, const Request_msg& req)
  * start servicing requests.  For example, this would be called after
  * the master boots its initial number of worker nodes.
  */
-//void server_init_complete();
+void server_init_complete();
 
 
 
@@ -81,7 +80,7 @@ void send_request_to_worker(Worker_handle worker_handle, const Request_msg& req)
  * @param[out] tick_period call the handle_tick function with every
  * tick_period seconds.
  */
-void master_node_init();
+void master_node_init(int max_workers, int& tick_period);
 
 /**
  * @brief Handle new work from a remote client.
@@ -113,9 +112,7 @@ void handle_new_worker_online(Worker_handle worker_handle, int tag);
  * This function is called periodically (at a frequency set by
  * init_handlers).
  */
-//void handle_tick();
-
-void handle_pull_request(PullRequest& request, PullResponse& response);
+void handle_tick();
 
 
 

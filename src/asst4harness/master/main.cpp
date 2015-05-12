@@ -34,19 +34,16 @@ int main(int argc, char** argv) {
   google::InstallFailureSignalHandler();
 
   google::ParseCommandLineFlags(&argc, &argv, true);
-/*
   if (argc != 2) {
     fprintf(stderr, "Invalid number of aruments provided\n%s\n",
             google::ProgramUsage());
     exit(EXIT_FAILURE);
   }
 
-*/
-	printf("listening to %s\n", FLAGS_address.c_str());
   accept_fd = listen_to(FLAGS_address.c_str());
   CHECK_GE(accept_fd, 0) << "Could not listen on " << FLAGS_address;
   DLOG_IF(INFO, FLAGS_log_network) << "Listening on " << FLAGS_address;
-/*
+
   DLOG_IF(INFO, FLAGS_log_network) << "Waiting for launcher " << argv[1];
   while (launcher_fd < 0) {
     sleep(1);
@@ -57,12 +54,12 @@ int main(int argc, char** argv) {
   // Tell the launcher what address we are listening on.
   err = send_string(launcher_fd, FLAGS_address);
   CHECK_GE(err, 0) << "Error sending master info";
-*/
+
   harness_init();
 
   // student code
   int tick_seconds;
-  master_node_init();
+  master_node_init(FLAGS_max_workers, tick_seconds);
 
   struct timeval tick_period;
   tick_period.tv_sec = tick_seconds;

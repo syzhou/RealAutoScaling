@@ -25,7 +25,6 @@
 #include "types/types.h"
 #include "server/messages.h"
 #include "server/master.h"
-#include "server/pullrequest.h"
 
 #include  "tools/cycle_timer.h"
 
@@ -36,13 +35,11 @@
 extern int launcher_fd;
 extern int accept_fd;
 
-const static int BUFFER_SIZE = 2048;
-
 DEFINE_bool(log_network, false, "Log network traffic.");
 
 #define NETLOG(level) DLOG_IF(level, FLAGS_log_network)
 
-static bool is_server_initialized = true;
+static bool is_server_initialized = false;
 static int num_instances_booted = 0;
 static double total_worker_seconds;
 bool should_shutdown = false;
@@ -58,7 +55,7 @@ pthread_mutex_t worker_request_lock = PTHREAD_MUTEX_INITIALIZER;
 
 static struct Event_state {
   struct event_base *main_event_base;
-  //struct event_base *timer_event_base;
+  struct event_base *timer_event_base;
 
   std::vector<struct event_base *> client_event_bases;
   int client_event_base_size;
@@ -106,7 +103,6 @@ static void close_connection(void* connection_handle) {
 }
 
 // only master initialization and timer thread will call this function
-/*
 void request_new_worker_node(const Request_msg& req) {
   // HACK(kayvonf): stick the tag in the dictionary to avoid a lot of
   // extra plumbing
@@ -125,7 +121,6 @@ void request_new_worker_node(const Request_msg& req) {
   pending_worker_requests++;
   pthread_mutex_unlock(&worker_request_lock);
 }
-*/
 
 static void accumulate_time(Worker_handle worker_handle) {
   double start_time = worker_boot_times[worker_handle];
@@ -136,7 +131,6 @@ static void accumulate_time(Worker_handle worker_handle) {
   //printf("*** MASTER: accumulating %.2f sec\n", worker_up_time);
 }
 
-/*
 // only timer thread will call this function
 void kill_worker_node(Worker_handle worker_handle) {
   pthread_mutex_lock(&worker_handle_lock);
@@ -154,7 +148,6 @@ void kill_worker_node(Worker_handle worker_handle) {
   worker_boot_times.erase(worker_handle);
   pthread_mutex_unlock(&worker_boot_time_lock);
 }
-*/
 
 void send_request_to_worker(Worker_handle worker_handle, const Request_msg& job) {
   work_t comm_work;
@@ -207,11 +200,9 @@ void send_client_response(Client_handle client_handle, const Response_msg& resp)
     << "Unexpected connection failure with client " << event_get_fd(event);
 }
 
-/*
 void server_init_complete() {
   is_server_initialized = true;
 }
-*/
 
 static void shutdown() {
   LOG(INFO) << "Shutting down";
@@ -384,26 +375,6 @@ static void handle_worker_read(int fd, int16_t events, void* arg) {
   }
 }
 
-static void handle_autoscaler_read(int fd, int16_t events, void* arg) {
-  // recv protocol buffer message
-  unsigned char buf[BUFFER_SIZE];
-  int retval = read(fd, buf, BUFFER_SIZE);
-  NETLOG(INFO) << "AS: read " << retval << " bytes" ;
-
-  PullRequest request;
-  NETLOG(INFO) << "AS: created request";
-  request.ParseFromArray(buf, retval);
-
-  // handle request
-  PullResponse response;
-  handle_pull_request(request, response);
-
-  // generate response and send back
-  response.SerializeToArray(buf, response.ByteSize());
-  retval = write(fd, buf, response.ByteSize());
-  NETLOG(INFO) << "write " << retval << " bytes";
-}
-
 static void handle_accept_id_msg(int fd, int16_t events, void* arg) {
   assert(events & EV_READ);
   NETLOG(INFO) << "ID message on " << fd;
@@ -471,15 +442,6 @@ static void handle_accept_id_msg(int fd, int16_t events, void* arg) {
       break;
     }
 
-    case AUTOSCALER: {
-      NETLOG(INFO) << "Autoscaler " << tag << " on " << fd;
-      struct event *autoscaler_event;
-      autoscaler_event = event_new(estate.main_event_base, fd, EV_READ|EV_PERSIST,
-                                   handle_autoscaler_read, event_self_cbarg());
-      event_add(autoscaler_event, NULL);
-      break;
-    }
-
     case SHUTDOWN: {
       if (pending_worker_requests == 0) {
         shutdown();
@@ -515,7 +477,6 @@ static void handle_accept(int fd, int16_t events, void* arg) {
   event_add(read_id_event, NULL);
 }
 
-/*
 static void handle_timer(int fd, int16_t events, void* arg) {
   (void)fd;
   (void)events;
@@ -524,14 +485,12 @@ static void handle_timer(int fd, int16_t events, void* arg) {
   NETLOG(INFO) << "Timer tick";
   handle_tick();
 }
-*/
 
 void harness_init() {
   num_instances_booted = 0;
   total_worker_seconds = 0.0;
 }
 
-/*
 void *timer_event_thread(void *vargp) {
   pthread_detach(pthread_self());
 
@@ -550,7 +509,6 @@ void *timer_event_thread(void *vargp) {
 
   pthread_exit(NULL);
 }
-*/
 
 void *client_event_thread(void *vargp) {
   pthread_detach(pthread_self());
@@ -622,12 +580,10 @@ void harness_begin_main_loop(struct timeval* tick_period) {
   estate.main_event_base = main_event_base;
 
   // spawn a separate thread to dispatch timer events
-  /*
   pthread_t timer_event_tid;
   pthread_create(&timer_event_tid, NULL, timer_event_thread,
                  &estate.timer_event_base);
   DLOG(INFO) << "timer event thread started with ID " << timer_event_tid;
-  */
 
   // spawn dedicated threads to dispatch client events
   estate.client_event_bases.resize(NUM_CLIENT_EVENT_BASE);

@@ -43,9 +43,6 @@ std::ostream& operator<< (std::ostream &out, const message_t &message) {
     case NEW_CLIENT:
       out << "NEW_CLIENT";
       break;
-    case AUTOSCALER:
-      out << "AUTOSCALER";
-      break;
     default:
       LOG(FATAL) << "Invalid message " << std::hex << static_cast<int>(message);
   }
